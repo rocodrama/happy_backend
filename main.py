@@ -19,6 +19,8 @@ import models, schemas
 from database import engine, get_db
 from prompts import SYSTEM_PROMPT_TEMPLATE, USER_PROMPT_TEMPLATE, IMAGE_PROMPT_TEMPLATE
 
+from google.cloud import storage
+
 load_dotenv()
 
 # 기존 테이블 삭제
@@ -49,8 +51,26 @@ app = FastAPI(
 )
 
 # 이미지 파일 경로 설정
-os.makedirs("static/images", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# os.makedirs("static/images", exist_ok=True)
+# app.mount("/static", StaticFiles(directory="static"), name="static")
+
+storage_client = storage.Client()
+BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
+
+def upload_to_gcs(source_file_name, destination_blob_name):
+    """로컬 파일을 GCS에 올리고 공개 URL을 반환합니다."""
+    try:
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(destination_blob_name)
+        
+        # 파일 업로드
+        blob.upload_from_filename(source_file_name)
+
+        # 공개 URL 반환 (방식: https://storage.googleapis.com/버킷명/파일명)
+        return f"https://storage.googleapis.com/{BUCKET_NAME}/{destination_blob_name}"
+    except Exception as e:
+        print(f"GCS Upload Error: {e}")
+        raise e
 
 # CORS 설정 
 app.add_middleware(
@@ -200,14 +220,21 @@ def create_diary(request: schemas.DiaryCreateRequest, db: Session = Depends(get_
             # [중요] 이미지를 서버 폴더에 저장
             # 파일명: storyID_cutNo_랜덤.png
             filename = f"{new_story.story_id}_{cut_no}_{uuid.uuid4().hex[:8]}.png"
-            save_path = os.path.join("static/images", filename)
+            # save_path = os.path.join("static/images", filename)
+            
+            temp_path = f"temp_{filename}"
             
             # 이미지 저장
-            images[0].save(location=save_path, include_generation_parameters=False)
+            images[0].save(location=temp_path, include_generation_parameters=False)
+            image_url = upload_to_gcs(temp_path, filename)
             
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+            print(f"   -> GCS 업로드 완료: {image_url}")
             # 접속 가능한 URL 만들기 (예: http://localhost:8000/static/images/abc.png)
             # 실제 배포시엔 도메인 주소로 바꿔야 함
-            image_url = f"http://localhost:8000/static/images/{filename}"
+            # image_url = f"http://localhost:8000/static/images/{filename}"
 
         except Exception as e:
             print(f"   - Imagen 실패 ({cut_no}컷): {e}")
@@ -381,10 +408,18 @@ def regenerate_full_diary(diary_id: int, request: schemas.FullRegenerateRequest,
             
             # 파일 저장 및 URL 생성
             filename = f"{story.story_id}_{cut_no}_{uuid.uuid4().hex[:8]}_regen.png"
-            save_path = os.path.join("static/images", filename)
-            img_response[0].save(location=save_path, include_generation_parameters=False)
-            image_url = f"http://localhost:8000/static/images/{filename}"
+            # save_path = os.path.join("static/images", filename)
+            temp_path = f"temp_{filename}"
+            img_response[0].save(location=temp_path, include_generation_parameters=False)
+            # image_url = f"http://localhost:8000/static/images/{filename}"
+            image_url = upload_to_gcs(temp_path, filename)
+            
+            # 4. 임시 파일 삭제 (청소)
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
+            print(f"   -> GCS 업로드 완료: {image_url}")
+            
         except Exception as e:
             print(f"   - 이미지 생성 실패 ({cut_no}컷): {e}")
             image_url = "https://via.placeholder.com/1024?text=Generation+Failed" 
@@ -435,13 +470,20 @@ def regenerate_cut(cut_id: int, request: schemas.RegenerateRequest, db: Session 
         
         # 파일명 생성 및 저장 (고유 ID 사용)
         filename = f"{story.story_id}_{cut.cut_number}_{uuid.uuid4().hex[:8]}_regen.png"
-        save_path = os.path.join("static/images", filename)
+        # save_path = os.path.join("static/images", filename)
         
+        temp_path = f"temp_{filename}"
         # 이미지를 로컬 폴더에 저장
-        images[0].save(location=save_path, include_generation_parameters=False)
+        images[0].save(location=temp_path, include_generation_parameters=False)
+        image_url = upload_to_gcs(temp_path, filename)
         
+        if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        print(f"   -> GCS 업로드 완료: {image_url}")
+            
         # 접속 가능한 URL 생성 (이게 진짜 URL)
-        new_image_url = f"http://localhost:8000/static/images/{filename}"
+        # new_image_url = f"http://localhost:8000/static/images/{filename}"
 
         # ---------------------------------------------
         
