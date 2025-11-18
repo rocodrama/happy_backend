@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+bcrypt==3.2.2
+python-jose[cryptography]
+google-generativeai
+google-cloud-aiplatform
