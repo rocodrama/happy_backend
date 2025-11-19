@@ -59,17 +59,26 @@ BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 
 def upload_to_gcs(source_file_name, destination_blob_name):
     """로컬 파일을 GCS에 올리고 공개 URL을 반환합니다."""
+    
+    # [NEW] 함수 내에서 BUCKET_NAME을 직접 읽거나, 전역 변수를 사용하되 오류 시 처리
+    bucket_name = os.getenv("GCS_BUCKET_NAME") 
+    
+    # 만약 환경 변수가 없으면 오류 발생
+    if not bucket_name:
+        raise Exception("GCS_BUCKET_NAME 환경 변수가 설정되지 않았거나 로드 실패.")
+        
     try:
-        bucket = storage_client.bucket(BUCKET_NAME)
+        bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(destination_blob_name)
         
         # 파일 업로드
         blob.upload_from_filename(source_file_name)
 
-        # 공개 URL 반환 (방식: https://storage.googleapis.com/버킷명/파일명)
-        return f"https://storage.googleapis.com/{BUCKET_NAME}/{destination_blob_name}"
+        # 공개 URL 반환
+        return f"https://storage.googleapis.com/{bucket_name}/{destination_blob_name}"
     except Exception as e:
         print(f"GCS Upload Error: {e}")
+        # 오류가 나더라도 다음 처리를 위해 예외를 다시 발생시킵니다.
         raise e
 
 # CORS 설정 
@@ -475,12 +484,12 @@ def regenerate_cut(cut_id: int, request: schemas.RegenerateRequest, db: Session 
         temp_path = f"temp_{filename}"
         # 이미지를 로컬 폴더에 저장
         images[0].save(location=temp_path, include_generation_parameters=False)
-        image_url = upload_to_gcs(temp_path, filename)
+        new_image_url = upload_to_gcs(temp_path, filename)
         
         if os.path.exists(temp_path):
                 os.remove(temp_path)
 
-        print(f"   -> GCS 업로드 완료: {image_url}")
+        print(f"   -> GCS 업로드 완료: {new_image_url}")
             
         # 접속 가능한 URL 생성 (이게 진짜 URL)
         # new_image_url = f"http://localhost:8000/static/images/{filename}"
