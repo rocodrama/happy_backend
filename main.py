@@ -225,6 +225,9 @@ def create_diary(request: schemas.DiaryCreateRequest, db: Session = Depends(get_
                 safety_filter_level="block_some",
                 person_generation="allow_adult"
             )
+
+            if not images or len(images) == 0:
+                raise ValueError("Imagen이 이미지를 반환하지 않았습니다. (안전 필터 차단)")
             
             # [중요] 이미지를 서버 폴더에 저장
             # 파일명: storyID_cutNo_랜덤.png
@@ -477,6 +480,9 @@ def regenerate_cut(cut_id: int, request: schemas.RegenerateRequest, db: Session 
             person_generation="allow_adult"
         )
         
+        if not images or len(images) == 0:
+                raise ValueError("Imagen이 이미지를 반환하지 않았습니다. (안전 필터 차단)")
+                
         # 파일명 생성 및 저장 (고유 ID 사용)
         filename = f"{story.story_id}_{cut.cut_number}_{uuid.uuid4().hex[:8]}_regen.png"
         # save_path = os.path.join("static/images", filename)

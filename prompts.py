@@ -45,5 +45,5 @@ IMAGE_PROMPT_TEMPLATE = """
 {background_description}, 
 (masterpiece), best quality, high resolution, 
 {style} style, {character}, {action_description}, 
-cinematic lighting, detailed texture
+cinematic lighting, detailed texture,
 """
