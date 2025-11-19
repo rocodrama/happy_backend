@@ -28,13 +28,16 @@ class Diary(Base):
     owner = relationship("User", back_populates="diaries")
     stories = relationship("Story", back_populates="diary", cascade="all, delete")
 
+    cascade="all, delete-orphan", 
+    passive_deletes=True
+
 
 # 3. 각색된 스토리 테이블
 class Story(Base):
     __tablename__ = "stories"
 
     story_id = Column(Integer, primary_key=True, index=True)
-    diary_id = Column(Integer, ForeignKey("diaries.diary_id"))
+    diary_id = Column(Integer, ForeignKey("diaries.diary_id", ondelete="CASCADE"))
     full_story = Column(Text)
     genre = Column(String)
     style = Column(String)
@@ -43,7 +46,7 @@ class Story(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     diary = relationship("Diary", back_populates="stories")
-    cuts = relationship("Cut", back_populates="story", cascade="all, delete")
+    cuts = relationship("Cut", back_populates="story", cascade="all, delete-orphan",passive_deletes=True)
 
 
 # 4. 컷 별 상세 정보 테이블
@@ -51,7 +54,7 @@ class Cut(Base):
     __tablename__ = "cuts"
 
     cut_id = Column(Integer, primary_key=True, index=True)
-    story_id = Column(Integer, ForeignKey("stories.story_id"))
+    story_id = Column(Integer, ForeignKey("stories.story_id", ondelete="CASCADE"))
     
     cut_number = Column(Integer, nullable=False) # 1, 2, 3, 4
     cut_content = Column(Text)                   # 컷 별 대사/상황

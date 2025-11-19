@@ -2,7 +2,7 @@ import json
 import os
 import time
 import uuid
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles 
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ from google.cloud import storage
 load_dotenv()
 
 # 기존 테이블 삭제
-# models.Base.metadata.drop_all(bind=engine)
+models.Base.metadata.drop_all(bind=engine)
 
 # 테이블 생성
 models.Base.metadata.create_all(bind=engine)
@@ -38,7 +38,7 @@ gemini_model = genai.GenerativeModel(
     generation_config={"response_mime_type": "application/json"} 
 )
 
-# Imagen
+# Imagen   
 project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
 location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 vertexai.init(project=project_id, location=location)
@@ -218,35 +218,31 @@ def create_diary(request: schemas.DiaryCreateRequest, db: Session = Depends(get_
             print(f"   - {cut_no}번 컷 생성 중 (Imagen)...")
             
             # Imagen 호출 (이미지 데이터 반환)
-            images = imagen_model.generate_images(
+            response = imagen_model.generate_images(
                 prompt=final_image_prompt,
                 number_of_images=1,
-                aspect_ratio="1:1", # 1024x1024
+                aspect_ratio="1:1", 
                 safety_filter_level="block_some",
                 person_generation="allow_adult"
             )
 
-            if not images or len(images) == 0:
+            
+            if not response or not response.images:
                 raise ValueError("Imagen이 이미지를 반환하지 않았습니다. (안전 필터 차단)")
             
             # [중요] 이미지를 서버 폴더에 저장
-            # 파일명: storyID_cutNo_랜덤.png
             filename = f"{new_story.story_id}_{cut_no}_{uuid.uuid4().hex[:8]}.png"
-            # save_path = os.path.join("static/images", filename)
             
             temp_path = f"temp_{filename}"
             
-            # 이미지 저장
-            images[0].save(location=temp_path, include_generation_parameters=False)
+            # [수정] response.images[0]으로 접근해야 함
+            response.images[0].save(location=temp_path, include_generation_parameters=False)
             image_url = upload_to_gcs(temp_path, filename)
             
             if os.path.exists(temp_path):
                 os.remove(temp_path)
                 
             print(f"   -> GCS 업로드 완료: {image_url}")
-            # 접속 가능한 URL 만들기 (예: http://localhost:8000/static/images/abc.png)
-            # 실제 배포시엔 도메인 주소로 바꿔야 함
-            # image_url = f"http://localhost:8000/static/images/{filename}"
 
         except Exception as e:
             print(f"   - Imagen 실패 ({cut_no}컷): {e}")
@@ -408,6 +404,8 @@ def regenerate_full_diary(diary_id: int, request: schemas.FullRegenerateRequest,
         image_url = ""
         try:
             print(f"   - {cut_no}번 컷 이미지 재생성 중...")
+            
+            # [수정] 응답 객체 받기
             img_response = imagen_model.generate_images(
                 prompt=final_image_prompt,
                 number_of_images=1,
@@ -416,15 +414,17 @@ def regenerate_full_diary(diary_id: int, request: schemas.FullRegenerateRequest,
                 person_generation="allow_adult"
             )
 
-            if not img_response:
+            # [수정] .images 속성 확인
+            if not img_response or not img_response.images:
                 raise ValueError("Imagen이 이미지를 반환하지 않았습니다. (Safety Filter 차단 가능성)")
             
             # 파일 저장 및 URL 생성
             filename = f"{story.story_id}_{cut_no}_{uuid.uuid4().hex[:8]}_regen.png"
-            # save_path = os.path.join("static/images", filename)
             temp_path = f"temp_{filename}"
-            img_response[0].save(location=temp_path, include_generation_parameters=False)
-            # image_url = f"http://localhost:8000/static/images/{filename}"
+            
+            # [수정] .images[0] 사용
+            img_response.images[0].save(location=temp_path, include_generation_parameters=False)
+            
             image_url = upload_to_gcs(temp_path, filename)
             
             # 4. 임시 파일 삭제 (청소)
@@ -473,7 +473,7 @@ def regenerate_cut(cut_id: int, request: schemas.RegenerateRequest, db: Session 
         # --- [NEW/실제 로직] 이미지 생성 및 저장 ---
         
         # Imagen 호출
-        images = imagen_model.generate_images(
+        response = imagen_model.generate_images(
             prompt=target_prompt,
             number_of_images=1,
             aspect_ratio="1:1",
@@ -481,27 +481,23 @@ def regenerate_cut(cut_id: int, request: schemas.RegenerateRequest, db: Session 
             person_generation="allow_adult"
         )
         
-        if not images or len(images) == 0:
+        # [수정] .images 리스트 확인
+        if not response or not response.images:
             raise ValueError("Imagen이 이미지를 반환하지 않았습니다. (안전 필터 차단)")
 
         # 파일명 생성 및 저장 (고유 ID 사용)
         filename = f"{story.story_id}_{cut.cut_number}_{uuid.uuid4().hex[:8]}_regen.png"
-        # save_path = os.path.join("static/images", filename)
         
         temp_path = f"temp_{filename}"
-        # 이미지를 로컬 폴더에 저장
-        images[0].save(location=temp_path, include_generation_parameters=False)
+        
+        # [수정] response.images[0] 사용
+        response.images[0].save(location=temp_path, include_generation_parameters=False)
         new_image_url = upload_to_gcs(temp_path, filename)
         
         if os.path.exists(temp_path):
                 os.remove(temp_path)
 
         print(f"   -> GCS 업로드 완료: {new_image_url}")
-            
-        # 접속 가능한 URL 생성 (이게 진짜 URL)
-        # new_image_url = f"http://localhost:8000/static/images/{filename}"
-
-        # ---------------------------------------------
         
     except Exception as e:
         print(f"   - 재생성 실패: {e}")
@@ -516,3 +512,21 @@ def regenerate_cut(cut_id: int, request: schemas.RegenerateRequest, db: Session 
     db.commit()
 
     return {"new_image_url": new_image_url}
+
+@app.delete("/api/diaries/{diary_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Diary"], summary="일기 삭제")
+def delete_diary(diary_id: int, db: Session = Depends(get_db)):
+    
+    # 1. 삭제할 일기 객체 조회
+    diary = db.query(models.Diary).filter(models.Diary.diary_id == diary_id).first()
+    
+    if not diary:
+        raise HTTPException(status_code=404, detail="삭제할 일기를 찾을 수 없습니다.")
+
+    # 2. 삭제 실행 (수정된 부분)
+    # db.delete()를 쓰면 SQLAlchemy가 모델의 cascade 설정을 보고 
+    # 연관된 Story, Cut을 알아서 먼저 지워줍니다. (DB 설정이 없어도 동작)
+    db.delete(diary) 
+    db.commit()
+
+    # 3. 반환
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
