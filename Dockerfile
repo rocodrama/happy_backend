@@ -11,7 +11,7 @@ COPY requirements.txt .
 # (예: fastapi, uvicorn, sqlalchemy, psycopg2-binary, passlib[bcrypt], openai, google-cloud-aiplatform 등)
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY service_account.json /app/service_account.json
+# COPY service_account.json /app/service_account.json
 
 # 나머지 코드 복사
 COPY . .
