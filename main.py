@@ -24,7 +24,7 @@ from google.cloud import storage
 load_dotenv()
 
 # 기존 테이블 삭제
-models.Base.metadata.drop_all(bind=engine)
+# models.Base.metadata.drop_all(bind=engine)
 
 # 테이블 생성
 models.Base.metadata.create_all(bind=engine)
