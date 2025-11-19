@@ -84,7 +84,8 @@ def upload_to_gcs(source_file_name, destination_blob_name):
 # CORS 설정 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # frontend 주소
+    allow_origins=["http://localhost:5173",
+                  happy-front-9kk3csh3a-rocodramas-projects.vercel.app], # frontend 주소
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
