@@ -84,7 +84,7 @@ def upload_to_gcs(source_file_name, destination_blob_name):
 # CORS 설정 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # frontend 주소
+    allow_origins=["http://localhost:5173","https://bespoke-sherbet-2942d4.netlify.app"], # frontend 주소
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -103,6 +103,7 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
 
 # API 
 

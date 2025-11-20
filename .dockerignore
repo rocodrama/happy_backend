@@ -6,3 +6,4 @@ venv/
 .env
 .git
 .gitignore
+service_account.json

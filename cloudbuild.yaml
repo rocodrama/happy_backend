@@ -1,0 +1,73 @@
+# Source - https://stackoverflow.com/a
+# Posted by ristol
+# Retrieved 2025-11-19, License - CC BY-SA 4.0
+
+options:
+  # 빌드 로그를 Cloud Logging에만 저장하여 비용 절감 및 보안 강화
+  logging: CLOUD_LOGGING_ONLY
+  # 치환 변수 내에서 다른 치환 변수를 사용할 수 있도록 설정 (예: _IMAGE_NAME)
+  dynamicSubstitutions: true
+
+steps:
+  # Step 1: Docker 이미지 빌드
+  - name: "gcr.io/cloud-builders/docker"
+    id: Build_Image
+    args:
+      - build
+      - "--no-cache" # 빌드 캐시 사용 안 함
+      - "-t"
+      - "${_IMAGE_NAME}" # 이미지 이름 치환 변수 사용
+      - "." # 현재 디렉토리의 Dockerfile 사용
+
+  # Step 2: Docker 이미지 Artifact Registry에 푸시
+  - name: "gcr.io/cloud-builders/docker"
+    id: Push_Image
+    args:
+      - push
+      - "${_IMAGE_NAME}"
+
+  # Step 3: Cloud Run에 서비스 배포 (Secret Manager 사용)
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: Deploy_Service
+    args:
+      - run
+      - deploy
+      - "${_SERVICE_NAME}"
+      - "--image"
+      - "${_IMAGE_NAME}"
+      - "--platform=managed"
+      - "--region"
+      - "${_REGION}"
+      - "--allow-unauthenticated" # 인증되지 않은 호출 허용
+      - "--memory=1024Mi"
+      # Secret Manager에 저장된 시크릿을 환경 변수로 주입합니다.
+      # EXAMPLE_API_KEY는 환경 변수 이름, my-api-key:latest는 Secret Manager의 비밀 이름과 버전입니다.
+      - "--set-secrets=EXAMPLE_API_KEY=my-api-key:latest"
+      # ⚠️ 참고: 특정 런타임 서비스 계정 사용 시 아래 주석 해제 (보안 강화)
+      # - '--service-account=[PROJECT_NUMBER]-compute@developer.gserviceaccount.com'
+
+  # Step 4: Cloud Run Job 실행 (데이터베이스 마이그레이션 등)
+  # 이 단계는 별도의 'migrate-job'이 이미 정의되어 있다고 가정합니다.
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: Run_Migration_Job
+    entrypoint: /bin/bash
+    args:
+      - "-c"
+      - |
+        gcloud run jobs execute migrate-job \
+          --region ${_REGION}
+
+# 치환 변수 정의
+substitutions:
+  # Artifact Registry 이름 (프로젝트 내에 생성되어 있어야 함)
+  _ARTIFACT_REGISTRY: "example-europe-north1-registry"
+  # 배포할 Cloud Run 서비스 이름
+  _SERVICE_NAME: "example-service-name"
+  # 배포 리전
+  _REGION: "europe-north1"
+  # 최종 이미지 경로 (PROJECT_ID와 SHORT_SHA는 Cloud Build가 자동으로 제공하는 기본 변수입니다.)
+  _IMAGE_NAME: "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:${SHORT_SHA}"
+
+# 빌드 완료 후 Artifact Registry에 최종 이미지를 나열합니다.
+images:
+  - "${_IMAGE_NAME}"
